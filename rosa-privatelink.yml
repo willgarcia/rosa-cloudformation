@@ -1,0 +1,201 @@
+######################################################################################################################
+#  Copyright 2022 Amazon.com, Inc. or its affiliates. All Rights Reserved.                                           #
+#                                                                                                                    #
+#  Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except in compliance    #
+#  with the License. A copy of the License is located at                                                             #
+#                                                                                                                    #
+#      http://www.apache.org/licenses/LICENSE-2.0                                                                    #
+#                                                                                                                    #
+#  or in the 'license' file accompanying this file. This file is distributed on an 'AS IS' BASIS, WITHOUT WARRANTIES #
+#  OR CONDITIONS OF ANY KIND, express or implied. See the License for the specific language governing permissions    #
+#  and limitations under the License.                                                                                #
+######################################################################################################################
+
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "AWS CloudFormation Private Red Hat OpenShift on AWS (ROSA) using PrivateLink: This template creates an entirely private ROSA cluster on AWS with STS and PrivateLink endpoints to access the cluster for management."
+
+Parameters:
+  pEnableELBServiceLinkedRole:
+    AllowedValues: ["true", "false"]
+    Default: "false"
+    Description: "To create the ELB Service Linked Role, set this parameter to true"
+    Type: "String"
+  pPrivateVPCCidrBlock:
+    AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/\d{1,2}'
+    Default: 10.1.0.0/16
+    Description: Private VPC CIDR Block (eg 10.1.0.0/16)
+    Type: String
+  pPrivateVPCSubnetCidrBlock:
+    AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/\d{1,2}'
+    Default: 10.1.0.0/17
+    Description: Private Subnet CIDR Block (eg 10.1.0.0/17)
+    Type: String
+  pEgressVPCCidrBlock:
+    AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/\d{1,2}'
+    Default: 10.0.0.0/16
+    Description: Egress VPC CIDR Block (eg 10.0.0.0/16)
+    Type: String
+  pEgressVPCPrivateSubnetCidrBlock:
+    AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/\d{1,2}'
+    Default: 10.0.0.0/17
+    Description: Egress Private Subnet CIDR Block (eg 10.0.0.0/17)
+    Type: String
+  pEgressVPCPublicSubnetCidrBlock:
+    AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/\d{1,2}'
+    Default: 10.0.128.0/17
+    Description: Egress Public Subnet CIDR Block (eg 10.0.128.0/17)
+    Type: String
+
+Conditions:
+  pEnableELBServiceLinkedRole:
+    "Fn::Equals": [{ "Ref": "pEnableELBServiceLinkedRole" }, "true"]
+
+Resources:
+  rELBServiceLinkedRole:
+    Type: AWS::IAM::ServiceLinkedRole
+    Condition: pEnableELBServiceLinkedRole
+    Properties:
+      AWSServiceName: elasticloadbalancing.amazonaws.com
+      Description: ROSA ELB service role
+
+  # Private VPC
+  rPrivateVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock:
+        Ref: pPrivateVPCCidrBlock
+      EnableDnsSupport: "true"
+      Tags:
+        - Key: Name
+          Value: rosa-intranet-vpc
+  rPrivateVPCSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: rPrivateVPC
+      CidrBlock:
+        Ref: pPrivateVPCSubnetCidrBlock
+      Tags:
+        - Key: Name
+          Value: rosa-intranet-subnet
+
+  # Egress VPC
+  rEgressVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock:
+        Ref: pEgressVPCCidrBlock
+      EnableDnsSupport: "true"
+      Tags:
+        - Key: Name
+          Value: rosa-egress-vpc
+  rEgressVPCPrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: rEgressVPC
+      CidrBlock:
+        Ref: pEgressVPCPrivateSubnetCidrBlock
+      Tags:
+        - Key: Name
+          Value: rosa-egress-private-subnet
+  rEgressVPCPublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: rEgressVPC
+      CidrBlock:
+        Ref: pEgressVPCPublicSubnetCidrBlock
+      Tags:
+        - Key: Name
+          Value: rosa-egress-public-subnet
+  rInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: rosa-igw
+  rInternetGatewayEgressAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: rEgressVPC
+      InternetGatewayId:
+        Ref: rInternetGateway
+
+  # NAT Gateway
+  rEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  rNAT:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+          - rEIP
+          - AllocationId
+      SubnetId:
+        Ref: rEgressVPCPublicSubnet
+      Tags:
+        - Key: Name
+          Value: rosa-egress-public-rNAT
+
+  # Transit Gateway
+  rTransitGateway:
+    Type: AWS::EC2::TransitGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: rosa-tgw
+
+  rPrivateTransitGatewayAttachment:
+    Type: AWS::EC2::TransitGatewayAttachment
+    Properties:
+      SubnetIds:
+        - Ref: rPrivateVPCSubnet
+      TransitGatewayId:
+        Ref: rTransitGateway
+      VpcId:
+        Ref: rPrivateVPC
+      Tags:
+        - Key: Name
+          Value: rosa-intranet-tgw-attachment
+  rEgressTransitGatewayAttachment:
+    Type: AWS::EC2::TransitGatewayAttachment
+    Properties:
+      SubnetIds:
+        - Ref: rEgressVPCPrivateSubnet
+      TransitGatewayId:
+        Ref: rTransitGateway
+      VpcId:
+        Ref: rEgressVPC
+      Tags:
+        - Key: Name
+          Value: rosa-tgw-egress-tgw-attachment
+
+  # Egress gateway route
+  rEgressTransitGatewayRoute:
+    Type: AWS::EC2::TransitGatewayRoute
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      TransitGatewayAttachmentId:
+        Ref: rEgressTransitGatewayAttachment
+      TransitGatewayRouteTableId: String
+
+Outputs:
+  oPrivateVPC:
+    Value:
+      Ref: rPrivateVPC
+  oEgressVPC:
+    Value:
+      Ref: rEgressVPC
+  oTransitGatewayId:
+    Value: 
+      Ref: rTransitGateway
+
+  # TransitGatewayRouteTableMainId:
+  #   Description: Main Routing Table for TGW USE1.
+  #   Value: !Ref TransitGatewayRouteTableMain
+  #   Export:
+  #     Name: pact-net-tgwrt-main-use1
