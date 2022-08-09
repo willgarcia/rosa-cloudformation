@@ -77,9 +77,16 @@ VPC_EGRESS=`aws cloudformation describe-stacks --stack-name rosa-privatelink --q
 echo "Egress VPC Id: $VPC_EGRESS"
 DNS_DOMAIN=$(rosa describe cluster --cluster $ROSA_CLUSTER_NAME -ojson | jq -r .dns.base_domain)
 echo "ROSA Cluster Domain Name: $DNS_DOMAIN"
+```
 
-# The following step may fail if the cluster installation is still in pending state. 
-# Please repeat the command until the Route 53 Hosted Zone is found 
+Please, proceed with the following steps **during** cluster creation:
+
+1. Find the current status of the cluster with the `rosa list cluser`.
+2. If the cluster status is *installing*, run the following commands:
+
+```bash
+# The following step may fail if the cluster installation has not reached the DNS configuration stage. 
+# Please repeat the command until the Route 53 Hosted Zone is found
 R53HZ_ID=$(aws route53 list-hosted-zones-by-name | jq --arg name "$ROSA_CLUSTER_NAME.$DNS_DOMAIN." -r '.HostedZones | .[] | select(.Name=="\($name)") | .Id')
 echo "ROSA Cluster Route 53 Hosted Zone Id: $R53HZ_ID"
 aws route53 associate-vpc-with-hosted-zone --hosted-zone-id $R53HZ_ID --vpc VPCRegion=$AWS_REGION,VPCId=$VPC_EGRESS
