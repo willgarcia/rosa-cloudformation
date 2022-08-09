@@ -47,13 +47,14 @@ Parameters:
     Type: String
 
 Conditions:
-  pEnableELBServiceLinkedRole:
+  cEnableELBServiceLinkedRole:
     "Fn::Equals": [{ "Ref": "pEnableELBServiceLinkedRole" }, "true"]
 
 Resources:
+  # IAM Service linked role
   rELBServiceLinkedRole:
     Type: AWS::IAM::ServiceLinkedRole
-    Condition: pEnableELBServiceLinkedRole
+    Condition: cEnableELBServiceLinkedRole
     Properties:
       AWSServiceName: elasticloadbalancing.amazonaws.com
       Description: ROSA ELB service role
@@ -145,10 +146,11 @@ Resources:
   rTransitGateway:
     Type: AWS::EC2::TransitGateway
     Properties:
+      DefaultRouteTableAssociation: disable
+      DefaultRouteTablePropagation: disable
       Tags:
         - Key: Name
           Value: rosa-tgw
-
   rPrivateTransitGatewayAttachment:
     Type: AWS::EC2::TransitGatewayAttachment
     Properties:
@@ -175,27 +177,182 @@ Resources:
           Value: rosa-tgw-egress-tgw-attachment
 
   # Egress gateway route
+  rTransitGatewayRouteTable:
+    Type: AWS::EC2::TransitGatewayRouteTable
+    Properties:
+      Tags:
+        - Key: Name
+          Value: rosa-tgw-rt
+      TransitGatewayId:
+        Ref: rTransitGateway
   rEgressTransitGatewayRoute:
     Type: AWS::EC2::TransitGatewayRoute
     Properties:
       DestinationCidrBlock: 0.0.0.0/0
       TransitGatewayAttachmentId:
         Ref: rEgressTransitGatewayAttachment
-      TransitGatewayRouteTableId: String
+      TransitGatewayRouteTableId:
+        Ref: rTransitGatewayRouteTable
+  rEgressPrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      Tags:
+        - Key: Name
+          Value: rosa-egress-private-rt
+      VpcId:
+        Ref: rEgressVPC
+  rEgressPrivateRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: rEgressVPCPrivateSubnet
+      RouteTableId:
+        Ref: rEgressPrivateRouteTable
+
+  # NAT gateway route
+  rEgressPrivateToNATRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: rEgressPrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: rNAT
+  rEgressVPCPublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: rEgressVPC
+      Tags:
+        - Key: Name
+          Value: rosa-egress-public-rt
+  rPublicSubnetARtAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: rEgressVPCPublicSubnet
+      RouteTableId:
+        Ref: rEgressVPCPublicRouteTable
+  rEgressPrivateToIGWRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: rEgressVPCPublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: rInternetGateway
+  rEgressPrivateToTGWRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: rEgressVPCPublicRouteTable
+      DestinationCidrBlock: 10.1.0.0/16
+      TransitGatewayId:
+        Ref: rTransitGateway
+  rPrivateVPCRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: rPrivateVPC
+      Tags:
+        - Key: Name
+          Value: rosa-private-rt
+  rPrivateVPCSubnetARtAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: rPrivateVPCSubnet
+      RouteTableId:
+        Ref: rPrivateVPCRouteTable
+  rPrivateToTGWRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: rPrivateVPCRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      TransitGatewayId:
+        Ref: rTransitGateway
 
 Outputs:
+  oStackName:
+    Value:
+      Ref: AWS::StackName
   oPrivateVPC:
     Value:
       Ref: rPrivateVPC
+  oPrivateVPCSubnet:
+    Value:
+      Ref: rPrivateVPCSubnet
   oEgressVPC:
     Value:
       Ref: rEgressVPC
   oTransitGatewayId:
-    Value: 
+    Value:
       Ref: rTransitGateway
-
-  # TransitGatewayRouteTableMainId:
-  #   Description: Main Routing Table for TGW USE1.
-  #   Value: !Ref TransitGatewayRouteTableMain
-  #   Export:
-  #     Name: pact-net-tgwrt-main-use1
+  oELBServiceLinkedRole:
+    Condition: cEnableELBServiceLinkedRole
+    Value:
+      Ref: rELBServiceLinkedRole
+  oEgressVPCPrivateSubnet:
+    Value:
+      Ref: rEgressVPCPrivateSubnet
+  oEgressVPCPublicSubnet:
+    Value:
+      Ref: rEgressVPCPublicSubnet
+  oInternetGateway:
+    Value:
+      Ref: rInternetGateway
+  oInternetGatewayEgressAttachment:
+    Value:
+      Ref: rInternetGatewayEgressAttachment
+  oEIP:
+    Value:
+      Ref: rEIP
+  oNAT:
+    Value:
+      Ref: rNAT
+  oTransitGateway:
+    Value:
+      Ref: rTransitGateway
+  oPrivateTransitGatewayAttachment:
+    Value:
+      Ref: rPrivateTransitGatewayAttachment
+  oEgressTransitGatewayAttachment:
+    Value:
+      Ref: rEgressTransitGatewayAttachment
+  oTransitGatewayRouteTable:
+    Value:
+      Ref: rTransitGatewayRouteTable
+  oEgressTransitGatewayRoute:
+    Value:
+      Ref: rEgressTransitGatewayRoute
+  oEgressPrivateRouteTable:
+    Value:
+      Ref: rEgressPrivateRouteTable
+  oEgressPrivateRouteTableAssociation:
+    Value:
+      Ref: rEgressPrivateRouteTableAssociation
+  oEgressPrivateToNATRoute:
+    Value:
+      Ref: rEgressPrivateToNATRoute
+  oEgressVPCPublicRouteTable:
+    Value:
+      Ref: rEgressVPCPublicRouteTable
+  oPublicSubnetARtAssociation:
+    Value:
+      Ref: rPublicSubnetARtAssociation
+  oEgressPrivateToIGWRoute:
+    Value:
+      Ref: rEgressPrivateToIGWRoute
+  oEgressPrivateToTGWRoute:
+    Value:
+      Ref: rEgressPrivateToTGWRoute
+  oPrivateVPCRouteTable:
+    Value:
+      Ref: rPrivateVPCRouteTable
+  oPrivateVPCSubnetARtAssociation:
+    Value:
+      Ref: rPrivateVPCSubnetARtAssociation
+  oPrivateToTGWRoute:
+    Value:
+      Ref: rPrivateToTGWRoute
