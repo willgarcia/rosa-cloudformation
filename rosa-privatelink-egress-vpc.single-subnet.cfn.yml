@@ -11,10 +11,11 @@
 #  and limitations under the License.                                                                                #
 ######################################################################################################################
 
-######################################################################################################################
-# This template is provided "AS IS"                                                                                  #
-# without guarantees on the effects of deploying it in your environment.                                             #
-######################################################################################################################
+############################################################################################################################
+# This template is provided "AS IS"                                                                                        #
+# without guarantees on the effects of deploying it in your environment.                                                   #
+# This setup is not recommended for production as the infrastructure provisioned resides in a single AWS availability zone #
+############################################################################################################################
 
 AWSTemplateFormatVersion: "2010-09-09"
 Description: "This template creates the AWS PrivateLink networking infrastructure resources required to support a private Red Hat OpenShift on AWS (ROSA) cluster"
