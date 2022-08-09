@@ -1,6 +1,6 @@
 # ROSA PrivateLink
 
-This repository provide an AWS CloudFormation template that [creates a private Red Hat on OpenShift (ROSA) cluster using AWS PrivateLink and AWS Security Token Service (STS)](https://developers.redhat.com/articles/2022/04/27/create-privatelink-red-hat-openshift-cluster-aws-sts#create_the_subnets).
+This repository provides an AWS CloudFormation template that [creates a private Red Hat on OpenShift (ROSA) cluster using AWS PrivateLink and AWS Security Token Service (STS)](https://developers.redhat.com/articles/2022/04/27/create-privatelink-red-hat-openshift-cluster-aws-sts#create_the_subnets).
 
 ---
 
