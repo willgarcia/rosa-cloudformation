@@ -1,6 +1,6 @@
 # ROSA PrivateLink
 
-This repository provides an AWS CloudFormation templates that the AWS networking infrastructure resources required to support a [private Red Hat OpenShift on AWS (ROSA) cluster with AWS PrivateLink](https://aws.amazon.com/blogs/containers/red-hat-openshift-service-on-aws-private-clusters-with-aws-privatelink/).
+This repository provides AWS CloudFormation templates that the AWS networking infrastructure resources required to support a [private Red Hat OpenShift on AWS (ROSA) cluster with AWS PrivateLink](https://aws.amazon.com/blogs/containers/red-hat-openshift-service-on-aws-private-clusters-with-aws-privatelink/).
 
 ## Deployment
 
