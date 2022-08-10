@@ -23,17 +23,51 @@ Available AWS CloudFormation templates:
 Update the following command to launch of the CloudFormation template above, using the AWS CLI:
 
 ```bash
-export AWS_REGION=us-west-2 AWS_STACK_NAME=rosa-networking
-aws cloudformation create-stack --stack-name $AWS_STACK_NAME --template-body file://rosa-privatelink-egress-vpc.single-az.yml
+# AWS region to install OpenShift
+export AWS_DEFAULT_REGION=us-west-2 
+# AWS CloudFormation Stack name
+export AWS_STACK_NAME=rosa-networking
+# AWS profile
+export AWS_PROFILE=default
+# AWS account ID
+export AWS_ACCOUNT_ID=<xxx>
+
+$ aws cloudformation create-stack --stack-name $AWS_STACK_NAME --template-body file://rosa-privatelink-egress-vpc.single-az.yml
 ```
 
 ### Step 2: ROSA - initialisation
 
-Once step 1 is completed, the ROSA cluster can be created with the following commands:
+Once step 1 is completed, the ROSA configuration and account roles can be created with the following commands:
 
 ```bash
+# OpenShift version to install
+export OPENSHIFT_VERSION=4.9.15
+# AWS permission boundary. 
+export PERMISSION_BOUNDARY_ARN=arn:aws:iam::${AWS_ACCOUNT_ID}:policy/AccountBoundary 
+# Name of the cluster
+export ROSA_CLUSTER_NAME=rosa-cluster
+# Prefix assigned to the role names. Use a unique name per cluster
+export ROLE_PREFIX=ManagedOpenShift-${ROSA_CLUSTER_NAME}
+# Number of compute nodes
+export ROSA_NUM_COMPUTE_NODES=2
+# Instance type of the computer nodes
+export ROSA_COMPUTE_TYPE=m5.xlarge
+export ROSA_HOST_PREFIX=23
+# The public and private subnets for OpenShift. These subnets belong to an existing VPC that OpenShift 
+# will be using. 
+export ROSA_SUBNET_IDS=subnet-0f0c1850850b8e4ab,subnet-00898f202241a075c
+# An existing VPC CIDR that OpenShift will be using
+export ROSA_VPC_CIDR=10.1.0.0/16
+export ROSA_PRIVATE_SUBNET=`aws cloudformation describe-stacks --stack-name $AWS_STACK_NAME --query "Stacks[0].Outputs[?OutputKey=='oRosaVpcSubnet'].OutputValue" --output text`
+
+# Create account roles
 rosa create account-roles \
+    --version ${OPENSHIFT_VERSION} \
     --mode auto \
+    --permissions-boundary ${PERMISSION_BOUNDARY_ARN} \
+    --prefix ${ROLE_PREFIX} \
+    --profile ${AWS_PROFILE} \
+    --region ${AWS_DEFAULT_REGION} \
     --yes
 ```
 
@@ -42,25 +76,48 @@ rosa create account-roles \
 Create the ROSA private cluster using the following commands:
 
 ```bash
-export ROSA_CLUSTER_NAME=rosa-cluster
-export ROSA_PRIVATE_SUBNET=`aws cloudformation describe-stacks --stack-name $AWS_STACK_NAME --query "Stacks[0].Outputs[?OutputKey=='oRosaVpcSubnet'].OutputValue" --output text`
-echo "ROSA private subnet: $ROSA_PRIVATE_SUBNET"
-
+# Create ROSA cluster
 rosa create cluster \
-    -y \
-    --cluster-name $ROSA_CLUSTER_NAME \
     --private-link \
-    --machine-cidr=10.1.0.0/16 \
     --sts \
-    --version=4.9.15 \
-    --subnet-ids=$ROSA_PRIVATE_SUBNET \
-    --region $AWS_REGION
+    --cluster-name ${ROSA_CLUSTER_NAME} \
+    --compute-nodes ${ROSA_NUM_COMPUTE_NODES} \
+    --compute-machine-type ${ROSA_COMPUTE_TYPE} \
+    --version ${OPENSHIFT_VERSION} \
+    --machine-cidr ${ROSA_VPC_CIDR} \
+    --subnet-ids ${ROSA_PRIVATE_SUBNET} \
+    --host-prefix ${ROSA_HOST_PREFIX} \
+    --multi-az \ (optional)
+    --additional-trust-bundle-file RootCA.pem \ (optional)
+    --http-proxy http://proxy.xxxxxx:3128  \    (optional)
+    --https-proxy http://proxy.xxxxx:3128       (optional)
 
-rosa create operator-roles --cluster $ROSA_CLUSTER_NAME
-rosa create oidc-provider --cluster $ROSA_CLUSTER_NAME
+# Create OpenShift operators roles
+rosa create operator-roles \
+    --cluster ${ROSA_CLUSTER_NAME} \
+    --permissions-boundary ${PERMISISON_BOUNDARY_ARN} \
+    --prefix ${ROLE_PREFIX} \
+    --profile ${AWS_PROFILE} \
+    --region ${AWS_DEFAULT_REGION} \
+    --mode auto \
+    --yes
+
+# Create OpenID Connect (OIDC) provider for OpenShift
+rosa create oidc-provider \
+    --cluster ${ROSA_CLUSTER_NAME} \
+    --profile ${AWS_PROFILE} \
+    --region ${AWS_DEFAULT_REGION} \
+    --mode auto \
+    --yes
 ```
 
-Please, proceed with the following steps **during** cluster creation:
+You must then proceed with the following steps **during** cluster installation.
+
+---
+
+IMPORTANT: If DNS resolution is not configured as per the following steps, the ROSA cluster will fail to be created.This is because the boostrap and provisioned nodes must be able to use internal DNS name resolution in order to resolve OpenShift API endpoints **during** cluster installation.
+
+---
 
 1. Find the current status of the cluster with the `rosa list cluser` command.
 2. When the cluster status is *installing*, run the following commands:
@@ -91,10 +148,7 @@ aws cloudformation delete-stack --stack-name $AWS_STACK_NAME
 
 If you are looking to make your first contribution, follow the steps below.
 
-1. Tests
-
-You will to install [Docker](https://docs.docker.com/get-docker/) and [cfn-lint](https://github.com/aws-cloudformation/cfn-lint) and verify that the linting and security scanning tests are successful by using the following command: `bash test/run.sh`.
-
+1. Tests: you will need to install [Docker](https://docs.docker.com/get-docker/) and [cfn-lint](https://github.com/aws-cloudformation/cfn-lint) and verify that the linting and security scanning tests are successful by using the following command: `bash test/run.sh`.
 2. Open a Github Pull Request
 
 ---
