@@ -38,12 +38,12 @@ Parameters:
   pRosaVpcCidrBlock:
     AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/\d{1,2}'
     Default: 10.1.0.0/16
-    Description: Private VPC CIDR Block (eg 10.1.0.0/16)
+    Description: Private ROSA VPC CIDR Block (eg 10.1.0.0/16). Minimum value is /25.
     Type: String
   pRosaVpcSubnetCidrBlock:
     AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/\d{1,2}'
     Default: 10.1.0.0/17
-    Description: Private Subnet CIDR Block (eg 10.1.0.0/17)
+    Description: Private ROSA Subnet CIDR Block (eg 10.1.0.0/17)
     Type: String
   pEgressVpcCidrBlock:
     AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/\d{1,2}'
