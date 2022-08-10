@@ -374,7 +374,8 @@ Resources:
   rEgressTransitGatewayRoute2:
     Type: AWS::EC2::TransitGatewayRoute
     Properties:
-      DestinationCidrBlock: 10.0.0.0/16
+      DestinationCidrBlock:
+        Ref: pEgressVpcCidrBlock
       TransitGatewayAttachmentId:
         Ref: rEgressTransitGatewayAttachment
       TransitGatewayRouteTableId:
@@ -382,7 +383,8 @@ Resources:
   rEgressTransitGatewayRoute3:
     Type: AWS::EC2::TransitGatewayRoute
     Properties:
-      DestinationCidrBlock: 10.1.0.0/16
+      DestinationCidrBlock:
+        Ref: pRosaVpcCidrBlock
       TransitGatewayAttachmentId:
         Ref: rRosaTransitGatewayAttachment
       TransitGatewayRouteTableId:
@@ -441,7 +443,8 @@ Resources:
     Properties:
       RouteTableId:
         Ref: rEgressVpcPublicRouteTable
-      DestinationCidrBlock: 10.1.0.0/16
+      DestinationCidrBlock:
+        Ref: pRosaVpcCidrBlock
       TransitGatewayId:
         Ref: rTransitGateway
   rRosaVpcRouteTable:
