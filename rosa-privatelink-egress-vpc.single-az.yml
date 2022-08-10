@@ -25,16 +25,16 @@ Parameters:
     AllowedValues: ["true", "false"]
     Default: "false"
     Description: "To create the ELB Service Linked Role, set this parameter to true"
-    Type: "String"
+    Type: String
   pEnableVpcFlowLogs:
     AllowedValues: ["true", "false"]
     Default: "false"
     Description: "Send VPC Flow logs to AWS CloudWatch"
-    Type: "String"
+    Type: String
   pVpcFlowLogGroupRetentionDays:
     Default: 365
     Description: "VPC Flow logs retention days"
-    Type: "Number"
+    Type: Number
   pRosaVpcCidrBlock:
     AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/\d{1,2}'
     Default: 10.1.0.0/16
