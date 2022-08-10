@@ -1,22 +1,8 @@
 # ROSA PrivateLink
 
-This repository provides an AWS CloudFormation template that [creates a private Red Hat on OpenShift (ROSA) cluster using AWS PrivateLink and AWS Security Token Service (STS)](https://developers.redhat.com/articles/2022/04/27/create-privatelink-red-hat-openshift-cluster-aws-sts#create_the_subnets).
-
----
-
-IMPORTANT: This setup is not recommended for production as the infrastructure provisioned resides in a single AWS availability zone  
-
----
-
-## Architecture Overview
-
-This solution creates the AWS PrivateLink networking infrastructure resources required to support a private Red Hat OpenShift on AWS (ROSA) cluster.
-
-![rosa-privatelink-egress-vpc.single-subnet](assets/rosa-privatelink-egress-vpc.single-subnet.png)
+This repository provides an AWS CloudFormation templates that the AWS networking infrastructure resources required to support a [private Red Hat OpenShift on AWS (ROSA) cluster with AWS PrivateLink](https://aws.amazon.com/blogs/containers/red-hat-openshift-service-on-aws-private-clusters-with-aws-privatelink/).
 
 ## Deployment
-
-The solution is deployed using a CloudFormation template.
 
 ### Pre-requisites
 
@@ -26,24 +12,20 @@ The solution is deployed using a CloudFormation template.
 
 ### Step 1: AWS CloudFormation
 
-Create the AWS CloudFormation stack with the following command:
+Available AWS CloudFormation templates:
+
+| #   | Setup               | Description                                                           | Architecture                                                                                      | Multi-AZ | CloudFormation template                                                                |
+| --- | ------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------- |
+| 1   | PrivateLink cluster | Uses a TransitGateay attached to a ROSA Private VPC and an Egress VPC | [rosa-privatelink-egress-vpc.single-subnet](assets/rosa-privatelink-egress-vpc.single-subnet.png) | **No**   | [rosa-privatelink-egress-vpc.single-az.yml](rosa-privatelink-egress-vpc.single-az.yml) |
+
+Update the following command to launch the CloudFormation template using the AWS CLI:
 
 ```bash
-export AWS_REGION=us-west-2
-export AWS_STACK_NAME=rosa-privatelink
-
-aws cloudformation create-stack --stack-name $AWS_STACK_NAME --template-body file://rosa-privatelink-egress-vpc.single-subnet.cfn.yml
+export AWS_REGION=us-west-2 AWS_STACK_NAME=rosa-networking
+aws cloudformation create-stack --stack-name $AWS_STACK_NAME --template-body file://rosa-privatelink-egress-vpc.single-az.yml
 ```
 
-To change the parameters available, add the following option to the previous command:
-
-```bash
---parameters ParameterKey=pEnableELBServiceLinkedRole,ParameterValue=false ParameterKey=pROSAVPCSubnetCidrBlock,ParameterValue=10.1.0.0/17 ParameterKey=pROSAVPCCidrBlock,ParameterValue=10.1.0.0/16
-```
-
-See full list of parameters in [rosa-privatelink-egress-vpc.single-subnet.cfn > Parameters section](rosa-privatelink-egress-vpc.single-subnet.cfn.yml)
-
-### Step 2: ROSA cluster first initialisation
+### Step 2: ROSA - initialisation
 
 Once step 1 is completed, the ROSA cluster can be created with the following commands:
 
@@ -53,10 +35,10 @@ rosa create account-roles \
     --yes
 ```
 
-### Step 3: ROSA cluster installation
+### Step 3: ROSA - cluster installation
 
 ```bash
-export ROSA_CLUSTER_NAME=rosa-privlink
+export ROSA_CLUSTER_NAME=rosa-cluster
 export ROSA_PRIVATE_SUBNET=`aws cloudformation describe-stacks --stack-name $AWS_STACK_NAME --query "Stacks[0].Outputs[?OutputKey=='oRosaVpcSubnet'].OutputValue" --output text`
 echo "ROSA private subnet: $ROSA_PRIVATE_SUBNET"
 
@@ -72,11 +54,6 @@ rosa create cluster \
 
 rosa create operator-roles --cluster $ROSA_CLUSTER_NAME
 rosa create oidc-provider --cluster $ROSA_CLUSTER_NAME
-
-VPC_EGRESS=`aws cloudformation describe-stacks --stack-name rosa-privatelink --query "Stacks[0].Outputs[?OutputKey=='oEgressVpc'].OutputValue" --output text`
-echo "Egress VPC Id: $VPC_EGRESS"
-DNS_DOMAIN=$(rosa describe cluster --cluster $ROSA_CLUSTER_NAME -ojson | jq -r .dns.base_domain)
-echo "ROSA Cluster Domain Name: $DNS_DOMAIN"
 ```
 
 Please, proceed with the following steps **during** cluster creation:
@@ -85,6 +62,11 @@ Please, proceed with the following steps **during** cluster creation:
 2. If the cluster status is *installing*, run the following commands:
 
 ```bash
+VPC_EGRESS=`aws cloudformation describe-stacks --stack-name $AWS_STACK_NAME --query "Stacks[0].Outputs[?OutputKey=='oEgressVpc'].OutputValue" --output text`
+echo "Egress VPC Id: $VPC_EGRESS"
+DNS_DOMAIN=$(rosa describe cluster --cluster $ROSA_CLUSTER_NAME -ojson | jq -r .dns.base_domain)
+echo "ROSA Cluster Domain Name: $DNS_DOMAIN"
+
 # The following step may fail if the cluster installation has not reached the DNS configuration stage. 
 # Please repeat the command until the Route 53 Hosted Zone is found
 R53HZ_ID=$(aws route53 list-hosted-zones-by-name | jq --arg name "$ROSA_CLUSTER_NAME.$DNS_DOMAIN." -r '.HostedZones | .[] | select(.Name=="\($name)") | .Id')
@@ -100,6 +82,16 @@ Delete the ROSA cluster and CloudFormation stack by running the following comman
 rosa delete cluster -c $ROSA_CLUSTER_NAME
 aws cloudformation delete-stack --stack-name $AWS_STACK_NAME
 ```
+
+## Contributions
+
+If you are looking to make your first contribution, follow the steps below.
+
+1. Tests
+
+You will to install [Docker](https://docs.docker.com/get-docker/) and [cfn-lint](https://github.com/aws-cloudformation/cfn-lint) and verify that the linting and security scanning tests are successful by using the following command: `bash test/run.sh`.
+
+2. Open a Github Pull Request
 
 ---
 
