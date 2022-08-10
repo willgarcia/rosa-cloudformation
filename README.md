@@ -37,6 +37,8 @@ rosa create account-roles \
 
 ### Step 3: ROSA - cluster installation
 
+Create the ROSA private cluster using the following commands:
+
 ```bash
 export ROSA_CLUSTER_NAME=rosa-cluster
 export ROSA_PRIVATE_SUBNET=`aws cloudformation describe-stacks --stack-name $AWS_STACK_NAME --query "Stacks[0].Outputs[?OutputKey=='oRosaVpcSubnet'].OutputValue" --output text`
@@ -58,8 +60,8 @@ rosa create oidc-provider --cluster $ROSA_CLUSTER_NAME
 
 Please, proceed with the following steps **during** cluster creation:
 
-1. Find the current status of the cluster with the `rosa list cluser`.
-2. If the cluster status is *installing*, run the following commands:
+1. Find the current status of the cluster with the `rosa list cluser` command.
+2. When the cluster status is *installing*, run the following commands:
 
 ```bash
 VPC_EGRESS=`aws cloudformation describe-stacks --stack-name $AWS_STACK_NAME --query "Stacks[0].Outputs[?OutputKey=='oEgressVpc'].OutputValue" --output text`
