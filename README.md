@@ -18,7 +18,7 @@ Available AWS CloudFormation templates:
 | --- | ------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------- |
 | 1   | PrivateLink cluster | Uses a TransitGateay attached to a ROSA Private VPC and an Egress VPC | [rosa-privatelink-egress-vpc.single-subnet](assets/rosa-privatelink-egress-vpc.single-subnet.png) | **No**   | [rosa-privatelink-egress-vpc.single-az.yml](rosa-privatelink-egress-vpc.single-az.yml) |
 
-Update the following command to launch the CloudFormation template using the AWS CLI:
+Update the following command to launch of the CloudFormation template above, using the AWS CLI:
 
 ```bash
 export AWS_REGION=us-west-2 AWS_STACK_NAME=rosa-networking
