@@ -118,7 +118,7 @@ You must then proceed with the following steps **during** cluster installation.
 
 ---
 
-IMPORTANT: If DNS resolution is not configured as per the following steps, the ROSA cluster will fail to be created.This is because the boostrap and provisioned nodes must be able to use internal DNS name resolution in order to resolve OpenShift API endpoints **during** cluster installation.
+IMPORTANT: If DNS resolution is not configured as per the following steps, the ROSA cluster will fail to be created. This is because the boostrap and provisioned nodes must be able to use internal DNS name resolution in order to resolve OpenShift API endpoints **during** cluster installation.
 
 ---
 
