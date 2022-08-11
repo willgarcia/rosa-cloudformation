@@ -1,8 +1,6 @@
 # ROSA PrivateLink
 
-ROSA private clusters with PrivateLink can be deployed via the ROSA CLI, however, they must be deployed into an existing VPC.
-
-This repository provides AWS CloudFormation templates that create a default VPC for ROSA along with other AWS networking infrastructure resources required to support a [private Red Hat OpenShift on AWS (ROSA) cluster with AWS PrivateLink](https://aws.amazon.com/blogs/containers/red-hat-openshift-service-on-aws-private-clusters-with-aws-privatelink/).
+This repository provides AWS CloudFormation templates that help create example VPC architectures suitable for deploying [private Red Hat OpenShift on AWS (ROSA) clusters with AWS PrivateLink](https://aws.amazon.com/blogs/containers/red-hat-openshift-service-on-aws-private-clusters-with-aws-privatelink/).
 
 ## Deployment
 
@@ -16,9 +14,9 @@ This repository provides AWS CloudFormation templates that create a default VPC 
 
 Available AWS CloudFormation templates:
 
-| #   | Setup               | Description                                                           | Architecture                                                                                      | Multi-AZ | CloudFormation template                                                                |
-| --- | ------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------- |
-| 1   | PrivateLink cluster | Uses a TransitGateay attached to a ROSA Private VPC and an Egress VPC | [rosa-privatelink-egress-vpc.single-subnet](assets/rosa-privatelink-egress-vpc.single-subnet.png) | **No**   | [rosa-privatelink-egress-vpc.single-az.yml](rosa-privatelink-egress-vpc.single-az.yml) |
+| #   | Setup               | Description                                                           | Architecture                                                                                      | AZ support             | CloudFormation template                                            |
+| --- | ------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------- | ------------------------------------------------------------------ |
+| 1   | PrivateLink cluster | Uses a TransitGateay attached to a ROSA Private VPC and an Egress VPC | [rosa-privatelink-egress-vpc.single-subnet](assets/rosa-privatelink-egress-vpc.single-subnet.png) | Single AZ and Multi AZ | [rosa-privatelink-egress-vpc.yml](rosa-privatelink-egress-vpc.yml) |
 
 Update the following command to launch of the CloudFormation template above, using the AWS CLI:
 
@@ -30,20 +28,35 @@ export AWS_STACK_NAME=rosa-networking
 # AWS profile
 export AWS_PROFILE=default
 # AWS account ID
-export AWS_ACCOUNT_ID=<xxx>
+export AWS_ACCOUNT_ID=`aws sts get-caller-identity --query "Account" --output text`
 
-$ aws cloudformation create-stack --stack-name $AWS_STACK_NAME --template-body file://rosa-privatelink-egress-vpc.single-az.yml
+aws cloudformation create-stack --stack-name $AWS_STACK_NAME --template-body file://rosa-privatelink-egress-vpc.yml
 ```
 
 ### Step 2: ROSA - initialisation
 
-Once step 1 is completed, the ROSA configuration and account roles can be created with the following commands:
+Once step 1 is completed, the ROSA configuration and account roles can be created
+
+1. Extract the VPC CIDR ranges where OpenShift will be deployed:
+
+```bash
+# An existing VPC CIDR that OpenShift will be using
+export ROSA_VPC_CIDR=`aws cloudformation describe-stacks --stack-name $AWS_STACK_NAME --query "Stacks[0].Outputs[?OutputKey=='oRosaVpcCIDR'].OutputValue" --output text`
+
+# The public and private subnets for OpenShift. These subnets belong to an existing VPC that OpenShift will be using.
+# /!\ Depending on how many Availibility Zones the CloudFormation stack uses, run all or some of the following commands to retrieve the subnets in each Availibility Zone
+export ROSA_VPC_PRIVATE_SUBNET_A=`aws cloudformation describe-stacks --stack-name $AWS_STACK_NAME --query "Stacks[0].Outputs[?OutputKey=='oRosaVpcSubnetA'].OutputValue" --output text`
+# Optional if single AZ cluster
+export ROSA_VPC_PRIVATE_SUBNET_B=`aws cloudformation describe-stacks --stack-name $AWS_STACK_NAME --query "Stacks[0].Outputs[?OutputKey=='oRosaVpcSubnetB'].OutputValue" --output text`
+# Optional if two AZ cluster
+export ROSA_VPC_PRIVATE_SUBNET_C=`aws cloudformation describe-stacks --stack-name $AWS_STACK_NAME --query "Stacks[0].Outputs[?OutputKey=='oRosaVpcSubnetC'].OutputValue" --output text`
+```
+
+2. Configure the remaining ROSA cluster options and create the ROSA account roles:
 
 ```bash
 # OpenShift version to install
 export OPENSHIFT_VERSION=4.9.15
-# AWS permission boundary. 
-export PERMISSION_BOUNDARY_ARN=arn:aws:iam::${AWS_ACCOUNT_ID}:policy/AccountBoundary 
 # Name of the cluster
 export ROSA_CLUSTER_NAME=rosa-cluster
 # Prefix assigned to the role names. Use a unique name per cluster
@@ -53,18 +66,10 @@ export ROSA_NUM_COMPUTE_NODES=2
 # Instance type of the computer nodes
 export ROSA_COMPUTE_TYPE=m5.xlarge
 export ROSA_HOST_PREFIX=23
-# The public and private subnets for OpenShift. These subnets belong to an existing VPC that OpenShift 
-# will be using. 
-export ROSA_SUBNET_IDS=subnet-0f0c1850850b8e4ab,subnet-00898f202241a075c
-# An existing VPC CIDR that OpenShift will be using
-export ROSA_VPC_CIDR=10.1.0.0/16
-export ROSA_PRIVATE_SUBNET=`aws cloudformation describe-stacks --stack-name $AWS_STACK_NAME --query "Stacks[0].Outputs[?OutputKey=='oRosaVpcSubnet'].OutputValue" --output text`
 
 # Create account roles
 rosa create account-roles \
-    --version ${OPENSHIFT_VERSION} \
     --mode auto \
-    --permissions-boundary ${PERMISSION_BOUNDARY_ARN} \
     --prefix ${ROLE_PREFIX} \
     --profile ${AWS_PROFILE} \
     --region ${AWS_DEFAULT_REGION} \
@@ -85,18 +90,16 @@ rosa create cluster \
     --compute-machine-type ${ROSA_COMPUTE_TYPE} \
     --version ${OPENSHIFT_VERSION} \
     --machine-cidr ${ROSA_VPC_CIDR} \
-    --subnet-ids ${ROSA_PRIVATE_SUBNET} \
+    --subnet-ids ${ROSA_PRIVATE_SUBNET_A},${ROSA_PRIVATE_SUBNET_B},${ROSA_PRIVATE_SUBNET_C} \ # Adjust subnets depending on the number of Availability Zones available in the ROSA VPC 
     --host-prefix ${ROSA_HOST_PREFIX} \
-    --multi-az \ (optional)
-    --additional-trust-bundle-file RootCA.pem \ (optional)
-    --http-proxy http://proxy.xxxxxx:3128  \    (optional)
-    --https-proxy http://proxy.xxxxx:3128       (optional)
+    --multi-az \ # optional
+    --additional-trust-bundle-file RootCA.pem \ # optional
+    --http-proxy http://proxy.xxxxxx:3128  \    # optional
+    --https-proxy http://proxy.xxxxx:3128       # optional
 
 # Create OpenShift operators roles
 rosa create operator-roles \
     --cluster ${ROSA_CLUSTER_NAME} \
-    --permissions-boundary ${PERMISISON_BOUNDARY_ARN} \
-    --prefix ${ROLE_PREFIX} \
     --profile ${AWS_PROFILE} \
     --region ${AWS_DEFAULT_REGION} \
     --mode auto \
@@ -134,6 +137,8 @@ R53HZ_ID=$(aws route53 list-hosted-zones-by-name | jq --arg name "$ROSA_CLUSTER_
 echo "ROSA Cluster Route 53 Hosted Zone Id: $R53HZ_ID"
 aws route53 associate-vpc-with-hosted-zone --hosted-zone-id $R53HZ_ID --vpc VPCRegion=$AWS_REGION,VPCId=$VPC_EGRESS
 ```
+
+You can see the cluster installation logs during the process by running: `rosa logs install -c rosa-cluster --watch`.
 
 ### Decommissioning
 

@@ -11,16 +11,19 @@
 #  and limitations under the License.                                                                                #
 ######################################################################################################################
 
-############################################################################################################################
-# This template is provided "AS IS"                                                                                        #
-# without guarantees on the effects of deploying it in your environment.                                                   #
-# This setup is not recommended for production as the infrastructure provisioned resides in a single AWS availability zone #
-############################################################################################################################
-
 AWSTemplateFormatVersion: "2010-09-09"
 Description: "This template creates the AWS PrivateLink networking infrastructure resources required to support a private Red Hat OpenShift on AWS (ROSA) cluster"
 
 Parameters:
+  pNumberOfAZs:
+    Type: Number
+    AllowedValues:
+      - 1
+      - 2
+      - 3
+    Default: 2
+    Description: Number of Availability Zones
+
   pEnableELBServiceLinkedRole:
     AllowedValues: ["true", "false"]
     Default: "false"
@@ -38,12 +41,22 @@ Parameters:
   pRosaVpcCidrBlock:
     AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/\d{1,2}'
     Default: 10.1.0.0/16
-    Description: Private ROSA VPC CIDR Block (eg 10.1.0.0/16). Minimum value is /25.
+    Description: Private ROSA VPC CIDR Block (eg 10.1.0.0/16). Minimum value is /25 for Single AZ, /24 for Multi AZ.
     Type: String
-  pRosaVpcSubnetCidrBlock:
+  pRosaVpcSubnetACidrBlock:
     AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/\d{1,2}'
-    Default: 10.1.0.0/17
-    Description: Private ROSA Subnet CIDR Block (eg 10.1.0.0/17)
+    Default: 10.1.0.0/18
+    Description: Private ROSA Subnet A CIDR Block (eg 10.1.0.0/18)
+    Type: String
+  pRosaVpcSubnetBCidrBlock:
+    AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/\d{1,2}'
+    Default: 10.1.64.0/18
+    Description: Private ROSA Subnet B CIDR Block (eg 10.1.64.0/18). Required if pNumberOfAZs > 1
+    Type: String
+  pRosaVpcSubnetCCidrBlock:
+    AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/\d{1,2}'
+    Default: 10.1.128.0/17
+    Description: Private ROSA Subnet C CIDR Block (eg 10.1.128.0/17). Required if pNumberOfAZs is 3
     Type: String
   pEgressVpcCidrBlock:
     AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/\d{1,2}'
@@ -55,10 +68,10 @@ Parameters:
     Default: 10.0.0.0/17
     Description: Egress Private Subnet CIDR Block (eg 10.0.0.0/17)
     Type: String
-  pEgressVpcPublicSubnetCidrBlock:
+  pEgressVpcPublicSubnetACidrBlock:
     AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/\d{1,2}'
-    Default: 10.0.128.0/17
-    Description: Egress Public Subnet CIDR Block (eg 10.0.128.0/17)
+    Default: 10.0.128.0/19
+    Description: Egress Public Subnet A CIDR Block (eg 10.0.128.0/19)
     Type: String
 
 Conditions:
@@ -66,6 +79,10 @@ Conditions:
     "Fn::Equals": [{ "Ref": "pEnableELBServiceLinkedRole" }, "true"]
   cEnableVpcFlowLogs:
     "Fn::Equals": [{ "Ref": "pEnableVpcFlowLogs" }, "true"]
+  # Create a second subnet if pNumberOfAZs !== 1
+  cCreateSubnetB: !Not [!Equals [!Ref pNumberOfAZs, 1]]
+  # Create a third subnet if pNumberOfAZs === 3
+  cCreateSubnetC: !Equals [!Ref pNumberOfAZs, 3]
 
 Resources:
   # IAM Service linked role
@@ -87,17 +104,41 @@ Resources:
       Tags:
         - Key: Name
           Value: rosa-vpc
-  rRosaVpcSubnet:
+  rRosaVpcSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId:
         Ref: rRosaVpc
       CidrBlock:
-        Ref: pRosaVpcSubnetCidrBlock
+        Ref: pRosaVpcSubnetACidrBlock
+      AvailabilityZone: !Select [0, !GetAZs ] # Uses the first AZ available
       Tags:
         - Key: Name
-          Value: rosa-subnet
-
+          Value: rosa-subnet-a
+  rRosaVpcSubnetB:
+    Type: AWS::EC2::Subnet
+    Condition: cCreateSubnetB
+    Properties:
+      VpcId:
+        Ref: rRosaVpc
+      CidrBlock:
+        Ref: pRosaVpcSubnetBCidrBlock
+      AvailabilityZone: !Select [1, !GetAZs ] # Uses the second AZ available
+      Tags:
+        - Key: Name
+          Value: rosa-subnet-b
+  rRosaVpcSubnetC:
+    Type: AWS::EC2::Subnet
+    Condition: cCreateSubnetC
+    Properties:
+      VpcId:
+        Ref: rRosaVpc
+      CidrBlock:
+        Ref: pRosaVpcSubnetCCidrBlock
+      AvailabilityZone: !Select [2, !GetAZs ] # Uses the third AZ available
+      Tags:
+        - Key: Name
+          Value: rosa-subnet-c
   # Egress VPC
   rEgressVpc:
     Type: AWS::EC2::VPC
@@ -125,7 +166,7 @@ Resources:
       VpcId:
         Ref: rEgressVpc
       CidrBlock:
-        Ref: pEgressVpcPublicSubnetCidrBlock
+        Ref: pEgressVpcPublicSubnetACidrBlock
       Tags:
         - Key: Name
           Value: rosa-egress-public-subnet
@@ -176,7 +217,9 @@ Resources:
     Type: AWS::EC2::TransitGatewayAttachment
     Properties:
       SubnetIds:
-        - Ref: rRosaVpcSubnet
+        - Ref: rRosaVpcSubnetA
+        - !If [cCreateSubnetB, Ref: rRosaVpcSubnetB, !Ref "AWS::NoValue"]
+        - !If [cCreateSubnetC, Ref: rRosaVpcSubnetC, !Ref "AWS::NoValue"]
       TransitGatewayId:
         Ref: rTransitGateway
       VpcId:
@@ -422,7 +465,7 @@ Resources:
       Tags:
         - Key: Name
           Value: rosa-egress-public-rt
-  rEgressPublicSubnetARtAssociation:
+  rEgressPublicSubnetARouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId:
@@ -455,13 +498,30 @@ Resources:
       Tags:
         - Key: Name
           Value: rosa-private-rt
-  rRosaVpcSubnetARtAssociation:
+  rRosaVpcSubnetARouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId:
-        Ref: rRosaVpcSubnet
+        Ref: rRosaVpcSubnetA
       RouteTableId:
         Ref: rRosaVpcRouteTable
+  rRosaVpcSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: cCreateSubnetB
+    Properties:
+      SubnetId:
+        Ref: rRosaVpcSubnetB
+      RouteTableId:
+        Ref: rRosaVpcRouteTable
+  rRosaVpcSubnetCRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: cCreateSubnetC
+    Properties:
+      SubnetId:
+        Ref: rRosaVpcSubnetB
+      RouteTableId:
+        Ref: rRosaVpcRouteTable
+
   rRosaToTGWRoute:
     Type: AWS::EC2::Route
     DependsOn: rRosaTransitGatewayAttachment
@@ -479,9 +539,17 @@ Outputs:
   oRosaVpc:
     Value:
       Ref: rRosaVpc
-  oRosaVpcSubnet:
+  oRosaVpcSubnetA:
     Value:
-      Ref: rRosaVpcSubnet
+      Ref: rRosaVpcSubnetA
+  oRosaVpcSubnetB:
+    Condition: cCreateSubnetB
+    Value:
+      Ref: rRosaVpcSubnetB
+  oRosaVpcSubnetC:
+    Condition: cCreateSubnetC
+    Value:
+      Ref: rRosaVpcSubnetC
   oEgressVpc:
     Value:
       Ref: rEgressVpc
@@ -543,21 +611,31 @@ Outputs:
   oEgressVpcPublicRouteTable:
     Value:
       Ref: rEgressVpcPublicRouteTable
-  oPublicSubnetARtAssociation:
+  oPublicSubnetARouteTableAssociation:
     Value:
-      Ref: rEgressPublicSubnetARtAssociation
+      Ref: rEgressPublicSubnetARouteTableAssociation
   oEgressPrivateToIGWRoute:
     Value:
       Ref: rEgressPrivateToIGWRoute
   oEgressPrivateToTGWRoute:
     Value:
       Ref: rEgressPrivateToTGWRoute
+  oRosaVpcCIDR:
+    Value: !GetAtt rRosaVpc.CidrBlock
   oRosaVpcRouteTable:
     Value:
       Ref: rRosaVpcRouteTable
-  oRosaVpcSubnetARtAssociation:
+  oRosaVpcSubnetARouteTableAssociation:
     Value:
-      Ref: rRosaVpcSubnetARtAssociation
+      Ref: rRosaVpcSubnetARouteTableAssociation
+  oRosaVpcSubnetBRouteTableAssociation:
+    Condition: cCreateSubnetB
+    Value:
+      Ref: rRosaVpcSubnetBRouteTableAssociation
+  oRosaVpcSubnetCRouteTableAssociation:
+    Condition: cCreateSubnetC
+    Value:
+      Ref: rRosaVpcSubnetCRouteTableAssociation
   oPrivateToTGWRoute:
     Value:
       Ref: rRosaToTGWRoute
