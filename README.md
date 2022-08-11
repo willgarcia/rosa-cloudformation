@@ -18,7 +18,7 @@ Available AWS CloudFormation templates:
 | --- | ------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------- | ------------------------------------------------------------------ |
 | 1   | PrivateLink cluster | Uses a TransitGateay attached to a ROSA Private VPC and an Egress VPC | [rosa-privatelink-egress-vpc.single-subnet](assets/rosa-privatelink-egress-vpc.single-subnet.png) | Single AZ and Multi AZ | [rosa-privatelink-egress-vpc.yml](rosa-privatelink-egress-vpc.yml) |
 
-Update the following command to launch of the CloudFormation template above, using the AWS CLI:
+Update the following command to launch one of the CloudFormation template above, using the AWS CLI:
 
 ```bash
 # AWS region to install OpenShift
