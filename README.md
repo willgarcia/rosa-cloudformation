@@ -35,7 +35,7 @@ aws cloudformation create-stack --stack-name $AWS_STACK_NAME --template-body fil
 
 ### Step 2: ROSA - initialisation
 
-Once step 1 is completed, the ROSA configuration and account roles can be created
+Once step 1 is completed, the ROSA configuration and account roles can be created as per the following steps.
 
 1. Extract the VPC CIDR ranges where OpenShift will be deployed:
 
