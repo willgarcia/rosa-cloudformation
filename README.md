@@ -43,7 +43,7 @@ Once step 1 is completed, the ROSA configuration and account roles can be create
 # An existing VPC CIDR that OpenShift will be using
 export ROSA_VPC_CIDR=`aws cloudformation describe-stacks --stack-name $AWS_STACK_NAME --query "Stacks[0].Outputs[?OutputKey=='oRosaVpcCIDR'].OutputValue" --output text`
 
-# The public and private subnets for OpenShift. These subnets belong to an existing VPC that OpenShift will be using.
+# The subnets for OpenShift
 # /!\ Depending on how many Availibility Zones the CloudFormation stack uses, run all or some of the following commands to retrieve the subnets in each Availibility Zone
 export ROSA_VPC_PRIVATE_SUBNET_A=`aws cloudformation describe-stacks --stack-name $AWS_STACK_NAME --query "Stacks[0].Outputs[?OutputKey=='oRosaVpcSubnetA'].OutputValue" --output text`
 # Optional if single AZ cluster
