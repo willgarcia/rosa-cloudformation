@@ -14,9 +14,9 @@ This repository provides AWS CloudFormation templates that help create example V
 
 Available AWS CloudFormation templates:
 
-| #   | Setup               | Description                                                           | Architecture                                                                                      | AZ support             | CloudFormation template                                            |
-| --- | ------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------- | ------------------------------------------------------------------ |
-| 1   | PrivateLink cluster | Uses a TransitGateay attached to a ROSA Private VPC and an Egress VPC | [rosa-privatelink-egress-vpc.single-subnet](assets/rosa-privatelink-egress-vpc.single-subnet.png) | Single AZ and Multi AZ | [rosa-privatelink-egress-vpc.yml](rosa-privatelink-egress-vpc.yml) |
+| #   | Setup                                               | Description                                                                               | Architecture                                                          | AZ support             | CloudFormation template                                            |
+| --- | --------------------------------------------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ---------------------- | ------------------------------------------------------------------ |
+| 1   | PrivateLink cluster for Centralized Internet Egress | Uses a TransitGateay attached to a ROSA Private VPC and an Egress VPC, single NAT Gateway | [rosa-privatelink-egress-vpc](assets/rosa-privatelink-egress-vpc.png) | Single AZ and Multi AZ | [rosa-privatelink-egress-vpc.yml](rosa-privatelink-egress-vpc.yml) |
 
 Update the following command to launch one of the CloudFormation template above, using the AWS CLI:
 
