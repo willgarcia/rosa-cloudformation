@@ -62,7 +62,7 @@ export ROSA_CLUSTER_NAME=rosa-cluster
 # Prefix assigned to the role names. Use a unique name per cluster
 export ROLE_PREFIX=ManagedOpenShift-${ROSA_CLUSTER_NAME}
 # Number of compute nodes
-export ROSA_NUM_COMPUTE_NODES=2
+export ROSA_NUM_COMPUTE_NODES=3
 # Instance type of the computer nodes
 export ROSA_COMPUTE_TYPE=m5.xlarge
 export ROSA_HOST_PREFIX=23
@@ -90,7 +90,7 @@ rosa create cluster \
     --compute-machine-type ${ROSA_COMPUTE_TYPE} \
     --version ${OPENSHIFT_VERSION} \
     --machine-cidr ${ROSA_VPC_CIDR} \
-    --subnet-ids ${ROSA_PRIVATE_SUBNET_A},${ROSA_PRIVATE_SUBNET_B},${ROSA_PRIVATE_SUBNET_C} \ # Adjust subnets depending on the number of Availability Zones available in the ROSA VPC 
+    --subnet-ids "${ROSA_VPC_PRIVATE_SUBNET_A},${ROSA_VPC_PRIVATE_SUBNET_B},${ROSA_VPC_PRIVATE_SUBNET_C}" \ # Adjust subnets depending on the number of Availability Zones available in the ROSA VPC 
     --host-prefix ${ROSA_HOST_PREFIX} \
     --multi-az \ # optional
     --additional-trust-bundle-file RootCA.pem \ # optional

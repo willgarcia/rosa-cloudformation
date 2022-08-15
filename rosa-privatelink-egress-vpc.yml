@@ -19,10 +19,9 @@ Parameters:
     Type: Number
     AllowedValues:
       - 1
-      - 2
       - 3
-    Default: 2
-    Description: Number of Availability Zones
+    Default: 3
+    Description: Number of Availability Zones. The number of Availability Zones for a Multi AZ ROSA cluster should be 3.
 
   pEnableELBServiceLinkedRole:
     AllowedValues: ["true", "false"]
