@@ -1,0 +1,354 @@
+######################################################################################################################
+#  Copyright 2022 Amazon.com, Inc. or its affiliates. All Rights Reserved.                                           #
+#                                                                                                                    #
+#  Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except in compliance    #
+#  with the License. A copy of the License is located at                                                             #
+#                                                                                                                    #
+#      http://www.apache.org/licenses/LICENSE-2.0                                                                    #
+#                                                                                                                    #
+#  or in the 'license' file accompanying this file. This file is distributed on an 'AS IS' BASIS, WITHOUT WARRANTIES #
+#  OR CONDITIONS OF ANY KIND, express or implied. See the License for the specific language governing permissions    #
+#  and limitations under the License.                                                                                #
+######################################################################################################################
+
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "This template creates the AWS PrivateLink networking infrastructure resources required to support a private Red Hat OpenShift on AWS (ROSA) cluster"
+
+Parameters:
+  pNumberOfAZs:
+    Type: Number
+    AllowedValues:
+      - 1
+      - 3
+    Default: 3
+    Description: Number of Availability Zones. The number of Availability Zones for a Multi AZ ROSA cluster should be 3.
+
+  pEnableELBServiceLinkedRole:
+    AllowedValues: ["true", "false"]
+    Default: "false"
+    Description: "To create the ELB Service Linked Role, set this parameter to true"
+    Type: String
+  pEnableVpcFlowLogs:
+    AllowedValues: ["true", "false"]
+    Default: "false"
+    Description: "Send VPC Flow logs to AWS CloudWatch"
+    Type: String
+  pVpcFlowLogGroupRetentionDays:
+    Default: 365
+    Description: "VPC Flow logs retention days"
+    Type: Number
+  pRosaVpcCidrBlock:
+    AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/\d{1,2}'
+    Default: 10.1.0.0/16
+    Description: Private ROSA VPC CIDR Block (eg 10.1.0.0/16). Minimum value is /25 for Single AZ, /24 for Multi AZ.
+    Type: String
+  pRosaVpcPrivateSubnetACidrBlock:
+    AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/\d{1,2}'
+    Default: 10.1.0.0/19
+    Description: Private ROSA Subnet A CIDR Block
+    Type: String
+  pRosaVpcPrivateSubnetBCidrBlock:
+    AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/\d{1,2}'
+    Default: 10.1.32.0/19
+    Description: Private ROSA Subnet B CIDR Block. Required if pNumberOfAZs > 1
+    Type: String
+  pRosaVpcPrivateSubnetCCidrBlock:
+    AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/\d{1,2}'
+    Default: 10.1.64.0/19
+    Description: Private ROSA Subnet C CIDR Block. Required if pNumberOfAZs is 3
+    Type: String
+  pRosaVpcPublicSubnetACidrBlock:
+    AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/\d{1,2}'
+    Default: 10.1.96.0/19
+    Description: Private ROSA Subnet A CIDR Block
+    Type: String
+
+Conditions:
+  cEnableELBServiceLinkedRole:
+    "Fn::Equals": [{ "Ref": "pEnableELBServiceLinkedRole" }, "true"]
+  cEnableVpcFlowLogs:
+    "Fn::Equals": [{ "Ref": "pEnableVpcFlowLogs" }, "true"]
+  # Create a second subnet if pNumberOfAZs !== 1
+  cCreateSubnetB: !Not [!Equals [!Ref pNumberOfAZs, 1]]
+  # Create a third subnet if pNumberOfAZs === 3
+  cCreateSubnetC: !Equals [!Ref pNumberOfAZs, 3]
+
+Resources:
+  # IAM Service linked role
+  rELBServiceLinkedRole:
+    Type: AWS::IAM::ServiceLinkedRole
+    Condition: cEnableELBServiceLinkedRole
+    Properties:
+      AWSServiceName: elasticloadbalancing.amazonaws.com
+      Description: ROSA ELB service role
+
+  # ROSA Private VPC
+  rRosaVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock:
+        Ref: pRosaVpcCidrBlock
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: rosa-vpc
+  rRosaVpcPrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: rRosaVpc
+      CidrBlock:
+        Ref: pRosaVpcPrivateSubnetACidrBlock
+      AvailabilityZone: !Select [0, !GetAZs ] # Uses the first AZ available
+      Tags:
+        - Key: Name
+          Value: rosa-private-subnet-a
+  rRosaVpcPrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Condition: cCreateSubnetB
+    Properties:
+      VpcId:
+        Ref: rRosaVpc
+      CidrBlock:
+        Ref: pRosaVpcPrivateSubnetBCidrBlock
+      AvailabilityZone: !Select [1, !GetAZs ] # Uses the second AZ available
+      Tags:
+        - Key: Name
+          Value: rosa-private-subnet-b
+  rRosaVpcPrivateSubnetC:
+    Type: AWS::EC2::Subnet
+    Condition: cCreateSubnetC
+    Properties:
+      VpcId:
+        Ref: rRosaVpc
+      CidrBlock:
+        Ref: pRosaVpcPrivateSubnetCCidrBlock
+      AvailabilityZone: !Select [2, !GetAZs ] # Uses the third AZ available
+      Tags:
+        - Key: Name
+          Value: rosa-private-subnet-c
+  rRosaVpcPublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: rRosaVpc
+      CidrBlock:
+        Ref: pRosaVpcPublicSubnetACidrBlock
+      AvailabilityZone: !Select [0, !GetAZs ] # Uses the first AZ available
+      Tags:
+        - Key: Name
+          Value: rosa-public-subnet-a
+
+  # Internet Gateway
+  rInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: rosa-igw
+  rInternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: rRosaVpc
+      InternetGatewayId:
+        Ref: rInternetGateway
+
+  # NAT Gateway
+  rElasticIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  rNATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+          - rElasticIP
+          - AllocationId
+      SubnetId:
+        Ref: rRosaVpcPublicSubnetA
+      Tags:
+        - Key: Name
+          Value: rosa-public-nat-a
+
+  # VPC Flow logs
+  rVpcsLogGroupKey:
+    Type: AWS::KMS::Key
+    Condition: cEnableVpcFlowLogs
+    Properties:
+      Enabled: true
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: 2012-10-17
+        Id: key-loggroup
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Join
+                - ""
+                - - !Sub "arn:${AWS::Partition}:iam::"
+                  - !Ref "AWS::AccountId"
+                  - ":root"
+            Action: "kms:*"
+            Resource: "*"
+          - Sid: Enable Cloudwatch access
+            Effect: Allow
+            Principal:
+              Service: !Sub "logs.${AWS::Region}.amazonaws.com"
+            Action:
+              - kms:Encrypt*
+              - kms:Decrypt*
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:Describe*
+            Resource: "*"
+  rRosaVpcFlowLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: cEnableVpcFlowLogs
+    Properties:
+      RetentionInDays:
+        Ref: pVpcFlowLogGroupRetentionDays
+      KmsKeyId:
+        Fn::GetAtt:
+          - rVpcsLogGroupKey
+          - Arn
+  rRosaVpcFlowLogCloudWatchRole:
+    Type: AWS::IAM::Role
+    Condition: cEnableVpcFlowLogs
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - vpc-flow-logs.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Resource:
+                  Fn::GetAtt:
+                    - rRosaVpcFlowLogGroup
+                    - Arn
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                  - logs:PutLogEvents
+  rRosaVpcFlowLogCloudWatch:
+    Type: AWS::EC2::FlowLog
+    Condition: cEnableVpcFlowLogs
+    Properties:
+      DeliverLogsPermissionArn:
+        Fn::GetAtt:
+          - rRosaVpcFlowLogCloudWatchRole
+          - Arn
+      LogDestination:
+        Fn::GetAtt:
+          - rRosaVpcFlowLogGroup
+          - Arn
+      ResourceId:
+        Ref: rRosaVpc
+      ResourceType: VPC
+      TrafficType: ALL
+
+  # NAT egress traffic
+  rEgressRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      Tags:
+        - Key: Name
+          Value: rosa-egress-rt
+      VpcId:
+        Ref: rRosaVpc
+  rEgressPrivateToNATRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: rEgressRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: rNATGateway
+  rEgressRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: rRosaVpcPublicSubnetA
+      RouteTableId:
+        Ref: rEgressRouteTable
+
+  # NAT private traffic
+  rPrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      Tags:
+        - Key: Name
+          Value: rosa-private-rt
+      VpcId:
+        Ref: rRosaVpc
+  rPrivateToNATRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: rPrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: rNATGateway
+  rPrivateRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: rRosaVpcPrivateSubnetA
+      RouteTableId:
+        Ref: rPrivateRouteTable
+
+Outputs:
+  oStackName:
+    Value:
+      Ref: AWS::StackName
+  oRosaVpc:
+    Value:
+      Ref: rRosaVpc
+  oRosaVpcSubnetA:
+    Value:
+      Ref: rRosaVpcPrivateSubnetA
+  oRosaVpcSubnetB:
+    Condition: cCreateSubnetB
+    Value:
+      Ref: rRosaVpcPrivateSubnetB
+  oRosaVpcSubnetC:
+    Condition: cCreateSubnetC
+    Value:
+      Ref: rRosaVpcPrivateSubnetC
+  oELBServiceLinkedRole:
+    Condition: cEnableELBServiceLinkedRole
+    Value:
+      Ref: rELBServiceLinkedRole
+  oInternetGateway:
+    Value:
+      Ref: rInternetGateway
+  oEIP:
+    Value:
+      Ref: rElasticIP
+  oNAT:
+    Value:
+      Ref: rNATGateway
+  oRosaVpcCIDR:
+    Value: !GetAtt rRosaVpc.CidrBlock
+  # oRosaVpcFlowLogGroup:
+  #   Condition: cEnableVpcFlowLogs
+  #   Value:
+  #     Ref: rRosaVpcFlowLogGroup
+  # oVpcsLogGroupKey:
+  #   Condition: cEnableVpcFlowLogs
+  #   Value:
+  #     Ref: rVpcsLogGroupKey
