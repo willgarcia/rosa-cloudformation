@@ -17,6 +17,7 @@ Available AWS CloudFormation templates:
 | #   | Setup               | Description                                                           | Architecture                                                                                      | AZ support             | CloudFormation template                                            |
 | --- | ------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------- | ------------------------------------------------------------------ |
 | 1   | PrivateLink cluster | Uses a TransitGateay attached to a ROSA Private VPC and an Egress VPC | [rosa-privatelink-egress-vpc.single-subnet](assets/rosa-privatelink-egress-vpc.single-subnet.png) | Single AZ and Multi AZ | [rosa-privatelink-egress-vpc.yml](rosa-privatelink-egress-vpc.yml) |
+| 2   | PrivateLink cluster in Single VPC                   | Private ROSA cluster in Single VPC, single NAT Gateway                                    | [rosa-privatelink-single-vpc](assets/rosa-privatelink-singe-vpc.png)  | Single AZ and Multi AZ | [rosa-privatelink-single-vpc.yml](rosa-privatelink-single-vpc.yml) |
 
 Update the following command to launch one of the CloudFormation template above, using the AWS CLI:
 
